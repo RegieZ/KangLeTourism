@@ -1,0 +1,98 @@
+package com.regino.travel.service.impl;
+
+import com.regino.travel.dao.RouteDao;
+import com.regino.travel.domain.PageBean;
+import com.regino.travel.domain.Route;
+import com.regino.travel.service.RouteService;
+import com.regino.travel.util.MyBatisUtils;
+import org.apache.ibatis.session.SqlSession;
+
+import java.util.List;
+
+// 一个模块就是一套代码
+public class RouteServiceImpl implements RouteService {
+    @Override
+    public PageBean<Route> findByPage(int currentPage, int pageSize, String cid) {
+        // 创建dao代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        RouteDao routeDao = sqlSession.getMapper(RouteDao.class);
+
+        // 创建分页对象pageBean
+        PageBean<Route> pageBean = new PageBean<>();
+
+        /*// 封装当前页和每页个数
+        pageBean.setCurrentPage(currentPage);
+        pageBean.setPageSize(pageSize);
+
+        // 调用dao查询总记录数，封装
+        Integer totalCount = routeDao.findCount(cid, rname);
+        pageBean.setTotalCount(totalCount);
+
+        // 计算总页数，封装
+        int totalPage = (int) Math.ceil(totalCount * 1.0 / pageSize);
+        pageBean.setTotalPage(totalPage);
+
+        // 计算开始索引
+        int index = (currentPage - 1) * pageSize;
+
+        // 调用dao查询结果集，封装
+        List<Route> routeList = routeDao.findList(index, pageSize, cid, rname);
+        pageBean.setList(routeList);*/
+
+        // 释放资源
+        MyBatisUtils.close(sqlSession);
+
+        // 返回分页对象
+        return pageBean;
+    }
+
+    @Override
+    public PageBean<Route> findByPage(int currentPage, int pageSize, String cid, String rname) {
+        // 创建dao代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        RouteDao routeDao = sqlSession.getMapper(RouteDao.class);
+
+        // 创建分页对象pageBean
+        PageBean<Route> pageBean = new PageBean<>();
+
+        // 封装当前页和每页个数
+        pageBean.setCurrentPage(currentPage);
+        pageBean.setPageSize(pageSize);
+
+        // 调用dao查询总记录数，封装
+        Integer totalCount = routeDao.findCount(cid, rname); // 在MyBatis的框架下，Dao层不能重载方法（出现同名方法，映射文件Mapper不知道找哪个方法了，如果方法重载一定会报错），alt+回车加上一个参数
+        pageBean.setTotalCount(totalCount);
+
+        // 计算总页数，封装
+        int totalPage = (int) Math.ceil(totalCount * 1.0 / pageSize);
+        pageBean.setTotalPage(totalPage);
+
+        // 计算开始索引
+        int index = (currentPage - 1) * pageSize;
+
+        // 调用dao查询结果集，封装（返回的是指定的（index）每一页的记录，有两种搜索方式：cid是导航分类，rname是搜索栏关键字）
+        List<Route> routeList = routeDao.findList(index, pageSize, cid, rname); // Dao层不能重载方法，alt+回车加上一个参数
+        pageBean.setList(routeList);
+
+        // 释放资源
+        MyBatisUtils.close(sqlSession);
+
+        // 返回分页对象
+        return pageBean;
+    }
+
+    @Override
+    public Route findDetail(String rid) {
+        // 创建dao代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        RouteDao routeDao = sqlSession.getMapper(RouteDao.class);
+
+        // 调用dao，MyBatis嵌套关联4张表
+        Route route = routeDao.findByRidWithAll(rid);
+
+        // 释放资源
+        MyBatisUtils.close(sqlSession);
+
+        return route;
+    }
+}

@@ -1,0 +1,107 @@
+package com.regino.travel.web.servlet;
+
+import cn.hutool.core.util.IdUtil;
+import com.regino.travel.domain.*;
+import com.regino.travel.factory.BeanFactory;
+import com.regino.travel.service.AddressService;
+import com.regino.travel.service.OrderService;
+import com.regino.travel.util.CartUtils;
+import com.regino.travel.util.JedisUtils;
+import redis.clients.jedis.Jedis;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+@WebServlet("/OrderServlet")
+public class OrderServlet extends BaseServlet {
+
+    private AddressService addressService = (AddressService) BeanFactory.getBean("addressService");
+
+    private OrderService orderService = (OrderService) BeanFactory.getBean("orderService");
+
+    // 模板，方便复制
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    }
+
+    // 商品结算
+    protected void orderInfo(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 获取session中user
+        User currentUser = (User) request.getSession().getAttribute("currentUser");
+        // 查询收货地址
+        List<Address> addressList = addressService.findByUid(currentUser.getUid());
+        // 查询cart
+        Cart cart = CartUtils.getCartFromRedis(currentUser);
+        // 设置到request域中
+        request.setAttribute("addressList", addressList);
+        request.setAttribute("cart", cart);
+        // 转发到 order_info
+        request.getRequestDispatcher("/order_info.jsp").forward(request, response);
+    }
+
+    // 生成订单
+    protected void createOrder(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 下单时间
+        Date orderDate = new Date();
+        // 接收请求参数
+        String addressId = request.getParameter("addressId");
+        String[] addressArray = addressId.split(","); // 收货人，收货地址，联系电话
+        // 获取session中的user
+        User currentUser = (User) request.getSession().getAttribute("currentUser");
+        // 获取redis中cart
+        Cart cart = CartUtils.getCartFromRedis(currentUser);
+        // 创建订单，设置基础数据
+        Order order = new Order();
+        order.setOid(IdUtil.simpleUUID()); // 订单号
+        order.setOrdertime(orderDate); // 下单时间
+        order.setTotal(cart.getCartTotal()); // 订单总金额
+        order.setState(0); // 未支付订单
+        order.setContact(addressArray[0]); // 收货人
+        order.setAddress(addressArray[1]); // 收货地址
+        order.setTelephone(addressArray[2]); // 收货电话
+        // order.setUser(currentUser); // 设置所属用户
+        order.setUid(currentUser.getUid()); // 为了简化设置所属用户，可以直接设置uid
+        // 遍历购物项，创建订单项
+        List<OrderItem> orderItemList = new ArrayList<>();
+        OrderItem orderItem = null;
+        for (CartItem cartItem : cart.getCartItemMap().values()) {
+            // 创建订单项
+            orderItem = new OrderItem();
+            orderItem.setItemtime(orderDate); // 下单时间
+            orderItem.setState(0); // 未支付
+            orderItem.setNum(cartItem.getNum()); // 数量
+            orderItem.setSubtotal(cartItem.getSubTotal()); // 商品小计
+            orderItem.setRid(cartItem.getRoute().getRid()); // 商品rid，简化数据库操作
+            orderItem.setOid(order.getOid()); // 订单oid，简化数据库操作
+            // 添加到订单项集合中
+            orderItemList.add(orderItem);
+        }
+        // 将订单项集合关联到订单实体中
+        order.setOrderItemList(orderItemList);
+        // 调用service保存到数据库
+        orderService.save(order);
+        // 清空购物车
+        Jedis jedis = JedisUtils.getJedis();
+        jedis.del("cart_" + currentUser.getUsername());
+        jedis.close();
+        // 重定向支付页面
+        // 无支付功能，阶段测试
+        // response.sendRedirect(request.getContextPath() + "/pay.jsp");
+        response.sendRedirect(request.getContextPath() + "/PayServlet?action=createUrl&oid=" + order.getOid() + "&price=" + order.getTotal());
+    }
+
+    // 模板，方便复制
+    protected void findState(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 接收请求参数oid
+        String oid = request.getParameter("oid");
+        // 调用service查询
+        ResultInfo resultInfo = orderService.findState(oid);
+        // 转为json响应到客户端
+        javaToJsonWriteClient(resultInfo, response);
+    }
+}

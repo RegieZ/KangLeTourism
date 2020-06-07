@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.regino.travel.dao.AddressDao">
+
+    <select id="findByUid" resultType="com.regino.travel.domain.Address">
+        select * from tab_address where uid = #{uid} order by isdefault desc
+    </select>
+
+    <insert id="save">
+        insert into tab_address(uid, contact, address, telephone, isdefault)
+        values(#{user.uid}, #{contact}, #{address}, #{telephone}, #{isdefault})
+    </insert><!--链接外键-->
+
+    <delete id="deleteByAid">
+        DELETE FROM tab_address WHERE aid = #{aid}
+    </delete>
+
+    <update id="clearDefault">
+        UPDATE tab_address SET isdefault = 0 WHERE uid = #{uid}
+    </update>
+
+    <update id="setAsDefault">
+       UPDATE tab_address SET isdefault = 1 WHERE aid = #{aid}
+    </update>
+
+    <update id="editByAid">
+       UPDATE tab_address SET contact = #{contact}, address = #{address}, telephone = #{telephone} WHERE aid = #{aid}
+    </update>
+
+</mapper>

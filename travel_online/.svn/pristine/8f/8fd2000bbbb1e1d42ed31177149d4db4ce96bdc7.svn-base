@@ -1,0 +1,26 @@
+package com.regino.travel.service.impl;
+
+import com.regino.travel.dao.CategoryDao;
+import com.regino.travel.domain.Category;
+import com.regino.travel.service.CategoryService;
+import com.regino.travel.util.MyBatisUtils;
+import org.apache.ibatis.session.SqlSession;
+
+import java.util.List;
+
+public class CategoryServiceImpl implements CategoryService {
+    @Override
+    public List<Category> findAll() {
+        // 获取代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        CategoryDao categoryDao = sqlSession.getMapper(CategoryDao.class);
+
+        // 调用dao
+        List<Category> categoryList = categoryDao.findAll();
+
+        // 关闭会话
+        MyBatisUtils.close(sqlSession);
+
+        return categoryList;
+    }
+}

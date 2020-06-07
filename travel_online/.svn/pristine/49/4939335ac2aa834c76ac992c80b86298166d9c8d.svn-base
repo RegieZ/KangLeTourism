@@ -1,0 +1,307 @@
+package com.regino.travel.web.servlet;
+
+import cn.hutool.core.util.IdUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.regino.travel.domain.ResultInfo;
+import com.regino.travel.domain.User;
+import com.regino.travel.factory.BeanFactory;
+import com.regino.travel.service.UserService;
+import com.regino.travel.util.JedisUtils;
+import org.apache.commons.beanutils.BeanUtils;
+import org.apache.commons.lang3.RandomStringUtils;
+import redis.clients.jedis.Jedis;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.MultipartConfig;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Part;
+import java.io.IOException;
+import java.util.Map;
+
+@WebServlet("/UserServlet")
+@MultipartConfig // 文件上传注解
+public class UserServlet extends BaseServlet {
+
+    // 传统方式
+    // UserService userService = new UserServiceImpl();
+
+    // 工厂模式，高内聚，低（松）耦合，编译期期间解耦、运行期间有耦合
+    private UserService userService = (UserService) BeanFactory.getBean("userService");
+
+    // 模板，方便复制
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException { }
+
+    // 注册
+    protected void register(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 验证码
+        // 获取请求参数
+        String telephone = request.getParameter("telephone");
+        String smsCode = request.getParameter("smsCode");
+
+        /*// 获取Session中的验证码
+        String sessionSmsCode = (String) request.getSession().getAttribute("smsCode_" + telephone);*/
+
+        // 获取Redis中的验证码
+        Jedis jedis = JedisUtils.getJedis();
+        String sessionSmsCode = jedis.get("smsCode_" + telephone);
+
+        // 校验验证码
+        if (sessionSmsCode == null || (!sessionSmsCode.equals(smsCode))) {
+            // 验证码不正确
+            request.setAttribute("resultInfo", new ResultInfo(false, "验证码不正确"));
+            request.getRequestDispatcher("/register.jsp").forward(request, response);
+            return;
+        }
+        // 验证码正确要删除Session中的验证码，见下文
+
+        // 用户信息
+        // 获取请求参数
+        Map<String, String[]> parameterMap = request.getParameterMap();
+
+        // 封装User实体
+        User param = new User();
+        try {
+            BeanUtils.populate(param, parameterMap);
+        } catch (Exception e) {
+            throw new RuntimeException("实体封装失败");
+        }
+
+        // 调用service
+        ResultInfo resultInfo = userService.register(param);
+
+        // 判断
+        if (resultInfo.getSuccess()) { // 成功
+            response.sendRedirect(request.getContextPath() + "/register_ok.jsp");
+            /*// 清除Session中的验证码
+            request.getSession().removeAttribute("smsCode_" + telephone);*/
+            // 清除Redis中的验证码
+            jedis.del("smsCode_" + telephone);
+        } else { // 失败
+            request.setAttribute("resultInfo", resultInfo);
+            request.getRequestDispatcher("/register.jsp").forward(request, response);
+        }
+
+        // 释放资源
+        jedis.close();
+    }
+
+    // ajax校验用户名
+    protected void findByUsername(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 获取请求参数
+        String username = request.getParameter("username");
+
+        // 调用service
+        User user = userService.findByUsername(username);
+
+        ResultInfo resultInfo = null;
+        // 判断
+        if (user != null) {
+            resultInfo = new ResultInfo(false, "用户名已存在");
+        } else {
+            resultInfo = new ResultInfo(true, "可以注册");
+        }
+
+        // 将resultInfo转为json
+        ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(resultInfo);
+
+        /*// 通过response响应
+        response.setContentType("application/json:charset=utf-8"); // Filter中已经写了，这里可以省略
+        response.getWriter().write(json);*/
+
+        // 直接调用抽取的方法（响应json）
+        javaToJsonWriteClient(resultInfo, response);
+    }
+
+    // ajax校验手机号
+    protected void findByTelephone(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 获取请求参数
+        String telephone = request.getParameter("telephone");
+
+        // 调用service
+        User user = userService.findByTelephone(telephone);
+
+        ResultInfo resultInfo = null;
+        // 判断
+        if (user != null) {
+            resultInfo = new ResultInfo(false, "手机号已存在");
+        } else {
+            resultInfo = new ResultInfo(true, "可以注册");
+        }
+
+        /*// 将resultInfo转为json
+        ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(resultInfo);
+
+        // 通过response响应
+        response.setContentType("application/json:charset=utf-8"); // Filter中已经写了，这里可以省略
+        response.getWriter().write(json);*/
+
+        // 直接调用抽取的方法（响应json）
+        javaToJsonWriteClient(resultInfo, response);
+    }
+
+    // ajax发送短信
+    protected void sendSms(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 获取请求参数
+        String telephone = request.getParameter("telephone");
+
+        // 生成6位随机数
+        String smsCode = RandomStringUtils.randomNumeric(6); // Apache提供的RandomStringUtils工具类
+
+        // 调用service
+        ResultInfo resultInfo = userService.sendSms(telephone, smsCode);
+
+        /*// 如果发送成功，将验证码写入到Session中
+        if (resultInfo.getSuccess()) {
+            request.getSession().setAttribute("smsCode_" + telephone, smsCode); // 以防同一个会话发送了两条短信
+        }*/
+
+        // 将验证码存到Redis中
+        if (resultInfo.getSuccess()) {
+            // 获取Jedis连接
+            Jedis jedis = JedisUtils.getJedis();
+
+            // 将验证码放置到Jedis中
+            jedis.setex("smsCode_" + telephone, 10, smsCode);
+
+            // 释放资源
+            jedis.close();
+
+            // 测试，已放到SmsUtils中
+            // System.out.println("短信验证码为：" + smsCode);
+        }
+
+        /*// 将resultInfo转为json
+        String json = new ObjectMapper().writeValueAsString(resultInfo);
+
+        // 通过response响应
+        response.setContentType("application/json:charset=utf-8"); // Filter中已经写了，这里可以省略
+        response.getWriter().write(json);*/
+
+        // 直接调用抽取的方法（响应json）
+        javaToJsonWriteClient(resultInfo, response);
+    }
+
+    // ajax密码登录
+    protected void pwdLogin(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        try {
+            // 获取请求参数
+            Map<String, String[]> parameterMap = request.getParameterMap();
+            // 封装User实体
+            User param = new User();
+            BeanUtils.populate(param, parameterMap);
+            // 调用service，返回resultInfo
+            ResultInfo resultInfo = userService.pwdLogin(param);
+            // 如果登录成功，将user写入session
+            if (resultInfo.getSuccess()) {
+                request.getSession().setAttribute("currentUser", resultInfo.getData());
+            }
+            // 将resultInfo转为json响应到客户端
+            javaToJsonWriteClient(resultInfo, response);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ajax短信登录
+    protected void telLogin(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 接收请求参数
+        String telephone = request.getParameter("telephone");
+        // 调用service查询
+        User currentUser = userService.findByTelephone(telephone);
+        // 校验手机号
+        ResultInfo resultInfo = null;
+        if (currentUser == null) {
+            resultInfo = new ResultInfo(false, "此手机号未注册");
+        } else { // 手机号存在
+            // 校验验证码
+            // 获取用户输入
+            String smsCode = request.getParameter("smsCode");
+            /*// 从Session中获取
+            String sessionCode = (String) request.getSession().getAttribute("smsCode_" + telephone); // 注意session中的和request域中的参数key名不一样*/
+            // 从Redis中获取
+            Jedis jedis=JedisUtils.getJedis();
+            String sessionCode = jedis.get("smsCode_"+telephone);
+            // 校验
+            if (sessionCode == null || (!sessionCode.equals(smsCode))) {
+                resultInfo = new ResultInfo(false, "短信验证码错误");
+            } else { // 登录成功
+                request.getSession().setAttribute("currentUser", currentUser);
+                resultInfo = new ResultInfo(true, "登录成功");
+                /*// 清除Session中验证码
+                request.getSession().removeAttribute("smsCode_" + telephone);*/
+                // 清除Redis中验证码
+                jedis.del("smsCode_"+telephone);
+            }
+            // 释放资源
+            jedis.close();
+            // 将resultInfo转为json，并响应到客户端
+            javaToJsonWriteClient(resultInfo, response);
+        }
+    }
+
+    // 用户退出
+    protected void logout(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        /*// 清除session
+        request.getSession().removeAttribute("currentUser");*/
+        // 一次性删除所有session，根据应用场景选择
+        request.getSession().invalidate();
+        // 重定向到首页
+        response.sendRedirect(request.getContextPath() + "/index.jsp");
+    }
+
+    // 用户中心回显
+    protected void userInfo(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 校验session
+        Object currentUser = request.getSession().getAttribute("currentUser");
+        // 失败，重定向回去
+        if (currentUser == null) {
+            response.sendRedirect(request.getContextPath() + "/index.jsp");
+            // 重定向可以省略return，请求转发不可以省略return，因为请求转发会继续执行下面的代码
+            return;
+        }
+        // 成功，请求转发
+        request.getRequestDispatcher("/home_index.jsp").forward(request, response);
+    }
+
+    // 个人信息修改
+    protected void updateInfo(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        try {
+            // 接收请求参数
+            Map<String, String[]> parameterMap = request.getParameterMap();
+            // 封装user实体
+            User param = new User();
+            BeanUtils.populate(param, parameterMap);
+            // start:文件上传
+            // 获取文件对象
+            Part part = request.getPart("pic");
+            // 获取文件名
+            String fileName = part.getSubmittedFileName();
+            // 判断是否提交文件
+            if (fileName.length() > 0) {
+                // 指定文件路径
+                String path = "/pic/" + IdUtil.simpleUUID() + fileName;
+                // 获取服务器真实路径
+                String realPath = request.getServletContext().getRealPath(path);
+                // 保存文件
+                part.write(realPath);
+                // 设置访问地址（不是服务器的真实路径）
+                param.setPic(path);
+            }
+            // end:文件上传
+            // 调用service
+            userService.updateInfo(param);
+            // 根据uid查询service，重置到session中
+            User currentUser = userService.findByUid(param.getUid());
+            request.getSession().setAttribute("currentUser", currentUser);
+            // 重定向到用户中心回显
+            response.sendRedirect(request.getContextPath() + "/UserServlet?action=userInfo");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+}

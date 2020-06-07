@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<beans>
+
+    <bean id="userService" class="com.regino.travel.service.impl.UserServiceImpl"/>
+
+    <bean id="addressService" class="com.regino.travel.service.impl.AddressServiceImpl"/>
+
+    <bean id="categoryService" class="com.regino.travel.service.impl.CategoryServiceImpl"/>
+
+    <bean id="routeService" class="com.regino.travel.service.impl.RouteServiceImpl"/>
+
+</beans>

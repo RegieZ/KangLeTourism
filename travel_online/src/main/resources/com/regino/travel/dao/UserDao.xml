@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.regino.travel.dao.UserDao">
+
+    <select id="findByUsername" resultType="com.regino.travel.domain.User">
+        select * from tab_user where username = #{username}
+    </select>
+
+    <select id="findByTelephone" resultType="com.regino.travel.domain.User">
+        select * from tab_user where telephone = #{telephone}
+    </select>
+
+    <!-- 映射文件中，有一个参数 parameterType 也可以省略，可见下例 -->
+    <insert id="save" parameterType="com.regino.travel.domain.User">
+        insert into tab_user(username,password,telephone) values(#{username},#{password},#{telephone})
+    </insert>
+
+    <!-- 动态 SQL -->
+    <update id="update">
+        update tab_user
+        <set>
+            <!-- 字符串类型除了非空判断，再添加非空串判断 -->
+            <if test="nickname != null and nickname != ''">
+                nickname= #{nickname},
+            </if>
+            <if test="sex != null and sex != ''">
+                sex= #{sex},
+            </if>
+            <if test="birthday != null and birthday != ''">
+                birthday= #{birthday},
+            </if>
+            <if test="email != null and email != ''">
+                email= #{email},
+            </if>
+            <if test="pic != null and pic != ''">
+                pic= #{pic},
+            </if>
+            <!-- 可以使用“文本对比工具”查错 -->
+        </set>
+        where uid = #{uid}
+    </update>
+
+    <select id="findByUid" resultType="com.regino.travel.domain.User">
+        select * from tab_user where uid=#{uid}
+    </select>
+
+</mapper>

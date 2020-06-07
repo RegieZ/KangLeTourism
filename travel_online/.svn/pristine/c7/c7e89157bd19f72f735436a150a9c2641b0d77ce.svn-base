@@ -1,0 +1,11 @@
+package com.regino.travel.service;
+
+import com.regino.travel.domain.Address;
+
+import java.util.List;
+
+public interface AddressService {
+    List<Address> findByUid(int uid);
+
+    void save(Address param);
+}

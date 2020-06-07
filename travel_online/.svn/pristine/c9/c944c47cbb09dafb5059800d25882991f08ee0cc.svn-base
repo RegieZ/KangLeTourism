@@ -1,0 +1,70 @@
+package com.regino.travel.service.impl;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.regino.travel.dao.CategoryDao;
+import com.regino.travel.domain.Category;
+import com.regino.travel.service.CategoryService;
+import com.regino.travel.util.JedisUtils;
+import com.regino.travel.util.MyBatisUtils;
+import org.apache.ibatis.session.SqlSession;
+import redis.clients.jedis.Jedis;
+
+import java.io.IOException;
+import java.util.List;
+
+public class CategoryServiceImpl implements CategoryService {
+
+    // 使用了Jedis连接池储存缓存
+    // 为了解决数据一致性问题，每次增删改时，清除缓存，所以不要直接改数据库
+    @Override
+    public List<Category> findAll() {
+
+        List<Category> categoryList = null;
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        // 先查缓存
+        Jedis jedis = JedisUtils.getJedis();
+        // 判断是否有导航分类缓存
+        if (jedis.exists("travel_category")) {
+            // 存在查询缓存
+            String json = jedis.get("travel_category");
+            // 通过objectMapper将json转为java对象
+            try {
+                categoryList = objectMapper.readValue(json, List.class);
+
+                // 测试
+                // System.out.println("从Redis中查询");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            // 不存在，查询数据库
+            // 获取代理对象
+            SqlSession sqlSession = MyBatisUtils.openSession();
+            CategoryDao categoryDao = sqlSession.getMapper(CategoryDao.class);
+
+            categoryList = categoryDao.findAll();
+
+            // 测试
+            // System.out.println("从MySQL中查询");
+
+            // 关闭会话
+            MyBatisUtils.close(sqlSession);
+
+            // 同步到Redis中
+            try {
+                String json = objectMapper.writeValueAsString(categoryList);
+                jedis.set("travel_category", json);
+            } catch (JsonProcessingException e) {
+                e.printStackTrace();
+            }
+
+        }
+        // 归还Jedis到连接池
+        jedis.close();
+
+        return categoryList;
+    }
+
+}

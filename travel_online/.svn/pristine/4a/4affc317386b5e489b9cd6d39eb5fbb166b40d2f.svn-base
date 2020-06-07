@@ -1,0 +1,216 @@
+package com.regino.travel.web.servlet;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.regino.travel.domain.ResultInfo;
+import com.regino.travel.domain.User;
+import com.regino.travel.service.UserService;
+import com.regino.travel.service.impl.UserServiceImpl;
+import org.apache.commons.beanutils.BeanUtils;
+import org.apache.commons.lang3.RandomStringUtils;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Map;
+
+@WebServlet("/UserServlet")
+public class UserServlet extends BaseServlet {
+
+    UserService userService = new UserServiceImpl();
+
+    // 模板，方便复制
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    }
+
+    // 注册
+    protected void register(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 验证码
+        // 获取请求参数
+        String telephone = request.getParameter("telephone");
+        String smsCode = request.getParameter("smsCode");
+
+        // 获取session中的验证码
+        String sessionSmsCode = (String) request.getSession().getAttribute("smsCode_" + telephone);
+
+        // 校验验证码
+        if (sessionSmsCode == null || (!sessionSmsCode.equals(smsCode))) {
+            // 验证码不正确
+            request.setAttribute("resultInfo", new ResultInfo(false, "验证码不正确"));
+            request.getRequestDispatcher("/register.jsp").forward(request, response);
+            return;
+        }
+        // 验证码正确要删除session中的验证码，见下文
+
+        // 用户信息
+        // 获取请求参数
+        Map<String, String[]> parameterMap = request.getParameterMap();
+
+        // 封装User实体
+        User param = new User();
+        try {
+            BeanUtils.populate(param, parameterMap);
+        } catch (Exception e) {
+            throw new RuntimeException("实体封装失败");
+        }
+
+        // 调用service
+        ResultInfo resultInfo = userService.register(param);
+
+        // 判断
+        if (resultInfo.getSuccess()) { // 成功
+            response.sendRedirect(request.getContextPath() + "/register_ok.jsp");
+            // 清除session中的验证码
+            request.getSession().removeAttribute("smsCode_" + telephone);
+        } else { // 失败
+            request.setAttribute("resultInfo", resultInfo);
+            request.getRequestDispatcher("/register.jsp").forward(request, response);
+        }
+    }
+
+    // ajax校验用户名
+    protected void findByUsername(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 获取请求参数
+        String username = request.getParameter("username");
+
+        // 调用service
+        User user = userService.findByUsername(username);
+
+        ResultInfo resultInfo = null;
+        // 判断
+        if (user != null) {
+            resultInfo = new ResultInfo(false, "用户名已存在");
+        } else {
+            resultInfo = new ResultInfo(true, "可以注册");
+        }
+
+        // 将resultInfo转为json
+        ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(resultInfo);
+
+        /*// 通过response响应
+        response.setContentType("application/json:charset=utf-8"); // Filter中已经写了，这里可以省略
+        response.getWriter().write(json);*/
+
+        // 直接调用抽取的方法（响应json）
+        javaToJsonWriteClient(resultInfo, response);
+    }
+
+    // ajax校验手机号
+    protected void findByTelephone(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 获取请求参数
+        String telephone = request.getParameter("telephone");
+
+        // 调用service
+        User user = userService.findByTelephone(telephone);
+
+        ResultInfo resultInfo = null;
+        // 判断
+        if (user != null) {
+            resultInfo = new ResultInfo(false, "手机号已存在");
+        } else {
+            resultInfo = new ResultInfo(true, "可以注册");
+        }
+
+        /*// 将resultInfo转为json
+        ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(resultInfo);
+
+        // 通过response响应
+        response.setContentType("application/json:charset=utf-8"); // Filter中已经写了，这里可以省略
+        response.getWriter().write(json);*/
+
+        // 直接调用抽取的方法（响应json）
+        javaToJsonWriteClient(resultInfo, response);
+    }
+
+    // ajax发送短信
+    protected void sendSms(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 获取请求参数
+        String telephone = request.getParameter("telephone");
+
+        // 生成6位随机数
+        String smsCode = RandomStringUtils.randomNumeric(6); // Apache提供的RandomStringUtils工具类
+
+        // 调用service
+        ResultInfo resultInfo = userService.sendSms(telephone, smsCode);
+
+        // 如果发送成功，将验证码写入到session中
+        if (resultInfo.getSuccess()) {
+            request.getSession().setAttribute("smsCode_" + telephone, smsCode); // 以防同一个会话发送了两条短信
+        }
+
+        /*// 将resultInfo转为json
+        String json = new ObjectMapper().writeValueAsString(resultInfo);
+
+        // 通过response响应
+        response.setContentType("application/json:charset=utf-8"); // Filter中已经写了，这里可以省略
+        response.getWriter().write(json);*/
+
+        // 直接调用抽取的方法（响应json）
+        javaToJsonWriteClient(resultInfo, response);
+    }
+
+    // ajax密码登录
+    protected void pwdLogin(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        try {
+            // 获取请求参数
+            Map<String, String[]> parameterMap = request.getParameterMap();
+            // 封装User实体
+            User param = new User();
+            BeanUtils.populate(param, parameterMap);
+            // 调用service，返回resultInfo
+            ResultInfo resultInfo = userService.pwdLogin(param);
+            // 如果登录成功，将user写入session
+            if (resultInfo.getSuccess()) {
+                request.getSession().setAttribute("currentUser", resultInfo.getData());
+            }
+            // 将resultInfo转为json响应到客户端
+            javaToJsonWriteClient(resultInfo, response);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ajax短信登录
+    protected void telLogin(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // 接收请求参数
+        String telephone = request.getParameter("telephone");
+        // 调用service查询
+        User currentUser = userService.findByTelephone(telephone);
+        // 校验手机号
+        ResultInfo resultInfo = null;
+        if (currentUser == null) {
+            resultInfo = new ResultInfo(false, "此手机号未注册");
+        } else { // 手机号存在
+            // 校验验证码
+            // 获取用户输入
+            String smsCode = request.getParameter("smsCode");
+            // 获取session
+            String sessionCode = (String) request.getSession().getAttribute("smsCode_" + telephone); // 注意session中的和request域中的参数key名不一样
+            // 校验
+            if (sessionCode == null || (!sessionCode.equals(smsCode))) {
+                resultInfo = new ResultInfo(false, "短信验证码错误");
+            } else { // 登录成功
+                request.getSession().setAttribute("currentUser", currentUser);
+                resultInfo = new ResultInfo(true, "登录成功");
+                // 清除session中验证码
+                request.getSession().removeAttribute("smsCode_" + telephone);
+            }
+            // 将resultInfo转为json，并响应到客户端
+            javaToJsonWriteClient(resultInfo, response);
+        }
+    }
+
+    // 用户退出
+    protected void logout(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException  {
+        /*// 清除session
+        request.getSession().removeAttribute("currentUser");*/
+        // 一次性删除所有session，根据应用场景选择
+        request.getSession().invalidate();
+        // 重定向到首页
+        response.sendRedirect(request.getContextPath() + "/index.jsp");
+    }
+
+}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>demo</title>
+    <script src="js/jquery-3.3.1.js"></script>
+    <script src="js/qrcode.min.js"></script>
+</head>
+<body>
+<div id="qrCode"></div>
+<script>
+    // 第一个参数是div的id，第二个参数是要生成二维码的url
+
+    // 方式一
+    // let qrCode = new QRCode('qrCode','https://qwert.blog.csdn.net/');
+
+    // 方式二
+    let qrCode = new QRCode('qrCode', {
+        text: 'https://qwert.blog.csdn.net/',
+        width: 200,
+        height: 200,
+        // colorLight: '#e21918', // 背景色
+        // colorDark: '#0078d7', // 前景色
+        correctLevel: QRCode.CorrectLevel.M // 误差矫正级别，默认是L（矫正级别最低）
+    });
+</script>
+</body>
+</html>

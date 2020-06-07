@@ -1,0 +1,39 @@
+package com.regino.travel.service.impl;
+
+import com.regino.travel.dao.AddressDao;
+import com.regino.travel.domain.Address;
+import com.regino.travel.service.AddressService;
+import com.regino.travel.util.MyBatisUtils;
+import org.apache.ibatis.session.SqlSession;
+
+import java.util.List;
+
+public class AddressServiceImpl implements AddressService {
+    @Override
+    public List<Address> findByUid(int uid) {
+        // 创建代理对象
+        SqlSession sqlSession= MyBatisUtils.openSession();
+        AddressDao addressDao= sqlSession.getMapper(AddressDao.class);
+
+        // 调用dao
+        List<Address> addressList = addressDao.findByUid(uid);
+
+        // 关闭会话
+        MyBatisUtils.close(sqlSession);
+
+        return addressList;
+    }
+
+    @Override
+    public void save(Address param) {
+        // 创建代理对象
+        SqlSession sqlSession= MyBatisUtils.openSession();
+        AddressDao addressDao= sqlSession.getMapper(AddressDao.class);
+
+        // 调用dao
+        addressDao.save(param);
+
+        // 关闭会话
+        MyBatisUtils.close(sqlSession);
+    }
+}

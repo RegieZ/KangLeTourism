@@ -1,0 +1,8 @@
+package com.regino.travel.dao;
+
+import com.regino.travel.domain.Order;
+import com.regino.travel.domain.OrderItem;
+
+public interface OrderItemDao {
+    void save(OrderItem orderItem);
+}

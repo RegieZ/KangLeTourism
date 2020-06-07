@@ -1,0 +1,178 @@
+package com.regino.travel.service.impl;
+
+import cn.hutool.crypto.SecureUtil;
+import com.aliyuncs.dysmsapi.model.v20170525.SendSmsResponse;
+import com.aliyuncs.exceptions.ClientException;
+import com.regino.travel.dao.UserDao;
+import com.regino.travel.domain.ResultInfo;
+import com.regino.travel.domain.User;
+import com.regino.travel.service.UserService;
+import com.regino.travel.util.MyBatisUtils;
+import com.regino.travel.util.SmsUtils;
+import org.apache.ibatis.session.SqlSession;
+
+public class UserServiceImpl implements UserService {
+
+    // 注册
+    @Override
+    public ResultInfo register(User param) {
+        ResultInfo resultInfo = null;
+
+        // 获取 UserDao 代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        UserDao userDao = sqlSession.getMapper(UserDao.class);
+
+        // 根据username查询dao并检验
+        User u1 = userDao.findByUsername(param.getUsername());
+        if (u1 != null) {
+            // 关闭sqlSession
+            MyBatisUtils.close(sqlSession);
+            return new ResultInfo(false, "用户名已存在");
+        }
+
+        // 根据telephone查询dao并检验
+        User u2 = userDao.findByTelephone(param.getTelephone());
+        if (u2 != null) {
+            // 关闭sqlSession
+            MyBatisUtils.close(sqlSession);
+            return new ResultInfo(false, "手机号已注册");
+        }
+
+        // 通过hutool工具包SecurUtil提供的md5方法对密码进行加密
+        String md5Pwd = SecureUtil.md5(param.getPassword());
+        param.setPassword(md5Pwd);
+
+        // 保存注册，完成注册
+        userDao.save(param);
+
+        // 关闭sqlSession
+        MyBatisUtils.close(sqlSession);
+
+        return new ResultInfo(true);
+    }
+
+    // 根据用户名查询
+    @Override
+    public User findByUsername(String username) {
+        // 获取 UserDao 代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        UserDao userDao = sqlSession.getMapper(UserDao.class);
+
+        User user = userDao.findByUsername(username);
+
+        // 关闭sqlSession
+        MyBatisUtils.close(sqlSession);
+
+        return user;
+    }
+
+    // 根据手机号查询
+    @Override
+    public User findByTelephone(String telephone) {
+        // 获取 UserDao 代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        UserDao userDao = sqlSession.getMapper(UserDao.class);
+
+        User user = userDao.findByTelephone(telephone);
+
+        // 关闭sqlSession
+        MyBatisUtils.close(sqlSession);
+
+        return user;
+    }
+
+    // 短信注册
+    @Override
+    public ResultInfo sendSms(String telephone, String smsCode) {
+        // 定义签名
+        String signName = "康乐旅游网";
+
+        // 定义模板
+        String templateCode = "SMS_190267873";
+
+        // 拼接验证码（json）
+        String param = "{\"code\":\"" + smsCode + "\"}";
+
+        /*// 调用工具类SmsUtils发送短信
+        try {
+            SendSmsResponse sendSmsResponse = SmsUtils.sendSms(telephone, signName, templateCode, param);
+            if (sendSmsResponse.getCode().equals("OK")) {
+                System.out.println("短信验证码为：" + smsCode);
+                return new ResultInfo(true, "短信发送成功");
+            }
+        } catch (ClientException e) {
+            e.printStackTrace();
+        }
+
+        return new ResultInfo(false, "短信发送失败");*/
+
+        // 测试期间用的伪代码
+        System.out.println("短信验证码为：" + smsCode);
+        return new ResultInfo(true, "短信发送成功（未验证）");
+    }
+
+    // 密码登录
+    @Override
+    public ResultInfo pwdLogin(User param) {
+        ResultInfo resultInfo = null;
+
+        // 获取 UserDao 代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        UserDao userDao = sqlSession.getMapper(UserDao.class);
+
+        // 根据用户名查询，校验用户名
+        User currentUser = userDao.findByUsername(param.getUsername());
+        if (currentUser == null) {
+            // 关闭sqlSession
+            MyBatisUtils.close(sqlSession);
+
+            return new ResultInfo(false, "用户名不存在");
+        }
+
+        // 校验密码
+        // 将用户输入的密码进行加密
+        String md5 = SecureUtil.md5(param.getPassword());
+        // 对比数据库
+        if (!currentUser.getPassword().equals(md5)) {
+            // 关闭sqlSession
+            MyBatisUtils.close(sqlSession);
+
+            return new ResultInfo(false, "密码不正确");
+        }
+
+        // 关闭sqlSession
+        MyBatisUtils.close(sqlSession);
+
+        return new ResultInfo(true,"登录成功", currentUser);
+    }
+
+    // 更新
+    @Override
+    public void updateInfo(User param) {
+        // 获取 UserDao 代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        UserDao userDao = sqlSession.getMapper(UserDao.class);
+
+        // 调用dao
+        userDao.update(param);
+
+        // 关闭sqlSession
+        MyBatisUtils.close(sqlSession);
+    }
+
+    // 根据id查询
+    @Override
+    public User findByUid(int uid) {
+        // 获取 UserDao 代理对象
+        SqlSession sqlSession = MyBatisUtils.openSession();
+        UserDao userDao = sqlSession.getMapper(UserDao.class);
+
+        // 调用dao
+        User user = userDao.findByUid(uid);
+
+        // 关闭sqlSession
+        MyBatisUtils.close(sqlSession);
+
+        return user;
+    }
+}

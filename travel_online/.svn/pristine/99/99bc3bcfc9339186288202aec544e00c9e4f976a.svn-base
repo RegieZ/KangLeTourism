@@ -1,0 +1,52 @@
+package com.regino.travel.factory;
+
+import com.regino.travel.service.UserService;
+import org.dom4j.Document;
+import org.dom4j.Element;
+import org.dom4j.io.SAXReader;
+
+import java.io.InputStream;
+
+// 使用 dom4j+xpath 表达式解析xml配置文件
+public class BeanFactory {
+
+    // 根据指定对象id创建对应对象实例
+    public static Object getBean(String id) {
+        // 声明返回对象
+        Object result = null;
+        try {
+            // 1.通过类加载器加载beans.xml配置文件，获取io流
+            InputStream in = BeanFactory.class.getClassLoader().getResourceAsStream("beans.xml");
+            // 2.创建dom4j核心解析器对象
+            SAXReader saxReader = new SAXReader();
+            // 3.读取io流，解析xml，创建document对象
+            Document document = saxReader.read(in);
+            // 4.编写xpath表达式
+            // String xpath = "//bean[@id='userService']";
+            String xpath = "//bean[@id='" + id + "']";
+            // 5.查找对应bean标签 element对象
+            Element element = (Element) document.selectSingleNode(xpath);
+            // 6.获取该标签的，class属性值，全限定类名
+            String className = element.attributeValue("class");
+            // 7.通过反射机制，加载到jvm虚拟机
+            Class<?> clazz = Class.forName(className);
+            // 8.创建对象实例
+            result = clazz.newInstance(); // 目标对象
+            // 9.调用日志工厂，创建代理对象
+            result = JdkProxyFactory.createLogProxy(result); // 代理对象覆盖
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
+    // 测试
+    public static void main(String[] args) {
+        // 传统方法
+        // UserService userService = new UserServiceImpl();
+
+        // 工厂模式
+        UserService userService = (UserService) BeanFactory.getBean("userService");
+        System.out.println(userService.findByUsername("adm"));
+    }
+}
